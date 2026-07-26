@@ -24,6 +24,7 @@ from prompts import (
     STRATEGY_PROMPT,
     FORMATTING_PROMPT,
     ANTI_AI_PROMPT,
+    VARIETY_PROMPT,
     build_profile_prompt,
     get_selling_prompt,
     get_expert_prompt,
@@ -872,9 +873,9 @@ async def call_beauty_ai(
     else:  # personal
         type_prompt = get_personal_prompt()
 
-    # ЭТАП 4: SYSTEM + PROFILE + HISTORY + TYPE + ANTI_AI
+    # ЭТАП 4: SYSTEM + STRATEGY + VARIETY + FORMATTING + PROFILE + HISTORY + TYPE + ANTI_AI
     system_instruction_text = (
-        SYSTEM_PROMPT + FORMATTING_PROMPT + profile_prompt + history_prompt + STRATEGY_PROMPT + type_prompt + ANTI_AI_PROMPT
+        SYSTEM_PROMPT + STRATEGY_PROMPT + VARIETY_PROMPT + FORMATTING_PROMPT + profile_prompt + history_prompt + type_prompt + ANTI_AI_PROMPT
     )
 
     payload = {
