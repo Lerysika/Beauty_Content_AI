@@ -25,6 +25,8 @@ from prompts import (
     STRATEGY_PROMPT,
     FORMATTING_PROMPT,
     CTA_PROMPT,
+    STORY_PROMPT,
+    HUMAN_PROMPT,
     ANTI_AI_PROMPT,
     build_profile_prompt,
     get_selling_prompt,
@@ -874,9 +876,9 @@ async def call_beauty_ai(
     else:  # personal
         type_prompt = get_personal_prompt()
 
-    # SYSTEM + STRATEGY + FORMATTING + PROFILE + HISTORY + TYPE + CTA + ANTI_AI
+    # SYSTEM + STRATEGY + FORMATTING + PROFILE + HISTORY + TYPE + CTA + STORY + HUMAN + ANTI_AI
     system_instruction_text = (
-        SYSTEM_PROMPT + STRATEGY_PROMPT + FORMATTING_PROMPT + profile_prompt + history_prompt + type_prompt + CTA_PROMPT + ANTI_AI_PROMPT
+        SYSTEM_PROMPT + STRATEGY_PROMPT + FORMATTING_PROMPT + profile_prompt + history_prompt + type_prompt + CTA_PROMPT + STORY_PROMPT + HUMAN_PROMPT + ANTI_AI_PROMPT
     )
 
     try:

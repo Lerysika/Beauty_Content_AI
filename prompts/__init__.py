@@ -11,6 +11,8 @@
 - personal_prompt.py   — личный пост (get_personal_prompt)
 - plan_prompt.py       — контент-план на 7 дней (get_plan_prompt)
 - cta_prompt.py        — разнообразие CTA окончаний постов (CTA_PROMPT)
+- story_prompt.py      — разнообразие сюжетов историй (STORY_PROMPT)
+- human_prompt.py      — живая человеческая речь (HUMAN_PROMPT)
 - anti_ai_prompt.py    — самопроверка на "AI-шность" (ANTI_AI_PROMPT)
 
 formatting_prompt.py не было в исходном ТЗ, но без него модель может начать
@@ -27,6 +29,8 @@ from .expert_prompt import get_expert_prompt
 from .personal_prompt import get_personal_prompt
 from .plan_prompt import get_plan_prompt
 from .cta_prompt import CTA_PROMPT
+from .story_prompt import STORY_PROMPT
+from .human_prompt import HUMAN_PROMPT
 from .anti_ai_prompt import ANTI_AI_PROMPT
 
 __all__ = [
@@ -39,5 +43,7 @@ __all__ = [
     "get_personal_prompt",
     "get_plan_prompt",
     "CTA_PROMPT",
+    "STORY_PROMPT",
+    "HUMAN_PROMPT",
     "ANTI_AI_PROMPT",
 ]
