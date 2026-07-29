@@ -2,3 +2,4 @@ aiogram>=3.4,<4
 supabase>=2.0
 python-dotenv>=1.0
 aiohttp-socks>=0.9
+openai>=1.0

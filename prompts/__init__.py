@@ -11,7 +11,6 @@
 - personal_prompt.py   — личный пост (get_personal_prompt)
 - plan_prompt.py       — контент-план на 7 дней (get_plan_prompt)
 - anti_ai_prompt.py    — самопроверка на "AI-шность" (ANTI_AI_PROMPT)
-- variety_prompt.py    — разнообразие структур постов (VARIETY_PROMPT)
 
 formatting_prompt.py не было в исходном ТЗ, но без него модель может начать
 возвращать markdown вместо HTML-тегов и ломать отправку сообщений в Telegram
@@ -27,7 +26,6 @@ from .expert_prompt import get_expert_prompt
 from .personal_prompt import get_personal_prompt
 from .plan_prompt import get_plan_prompt
 from .anti_ai_prompt import ANTI_AI_PROMPT
-from .variety_prompt import VARIETY_PROMPT
 
 __all__ = [
     "SYSTEM_PROMPT",
@@ -39,5 +37,4 @@ __all__ = [
     "get_personal_prompt",
     "get_plan_prompt",
     "ANTI_AI_PROMPT",
-    "VARIETY_PROMPT",
 ]

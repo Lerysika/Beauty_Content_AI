@@ -3,6 +3,7 @@ import logging
 import os
 import ssl
 from datetime import datetime
+from openai import AsyncOpenAI
 
 import certifi
 from aiohttp import ClientSession
@@ -24,7 +25,6 @@ from prompts import (
     STRATEGY_PROMPT,
     FORMATTING_PROMPT,
     ANTI_AI_PROMPT,
-    VARIETY_PROMPT,
     build_profile_prompt,
     get_selling_prompt,
     get_expert_prompt,
@@ -58,6 +58,9 @@ BOT_TOKEN = os.getenv("BOT_TOKEN")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 PROXY_URL = os.getenv("PROXY_URL")
+AI_API_KEY = os.getenv("AI_API_KEY")
+AI_BASE_URL = os.getenv("AI_BASE_URL", "https://api.aitunnel.ru/v1")
+AI_MODEL = os.getenv("AI_MODEL", "gemini-2.5-flash")
 
 if not all([BOT_TOKEN, SUPABASE_URL, SUPABASE_KEY]):
     raise ValueError("Заполните BOT_TOKEN, SUPABASE_URL и SUPABASE_KEY в файле .env")
@@ -67,6 +70,11 @@ logger = logging.getLogger(__name__)
 
 dp = Dispatcher()
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+ai_client = AsyncOpenAI(
+    api_key=AI_API_KEY,
+    base_url=AI_BASE_URL,
+)
 
 
 # ==================== FSM STATES ====================
@@ -848,21 +856,13 @@ async def handle_text_type(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
 
 
-# ==================== ГЕНЕРАЦИЯ ЧЕРЕЗ GEMINI ====================
+# ==================== ГЕНЕРАЦИЯ ЧЕРЕЗ AITUNNEL (OpenAI Compatible) ====================
 
-# --- ЭТАП 2: промпт собирается из модулей prompts/, никаких больших строк здесь больше нет ---
-# --- ИСПРАВЛЕНО: connector_owner=True для предотвращения утечек прокси-коннектора ---
 async def call_beauty_ai(
     prompt_text: str, text_type: str, profile: dict | None = None, history: list[dict] | None = None
 ) -> str:
-    api_key = os.getenv("AI_API_KEY")
-    proxy_url = os.getenv("PROXY_URL")
-
-    MODEL_NAME = "gemini-2.5-flash"
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL_NAME}:generateContent?key={api_key}"
-
     profile_prompt = build_profile_prompt(profile)
-    history_prompt = build_history_prompt(history)  # ЭТАП 4: пусто, если истории нет
+    history_prompt = build_history_prompt(history)
 
     if text_type == "plan":
         type_prompt = get_plan_prompt()
@@ -873,37 +873,24 @@ async def call_beauty_ai(
     else:  # personal
         type_prompt = get_personal_prompt()
 
-    # ЭТАП 4: SYSTEM + STRATEGY + VARIETY + FORMATTING + PROFILE + HISTORY + TYPE + ANTI_AI
+    # SYSTEM + STRATEGY + FORMATTING + PROFILE + HISTORY + TYPE + ANTI_AI
     system_instruction_text = (
-        SYSTEM_PROMPT + STRATEGY_PROMPT + VARIETY_PROMPT + FORMATTING_PROMPT + profile_prompt + history_prompt + type_prompt + ANTI_AI_PROMPT
+        SYSTEM_PROMPT + STRATEGY_PROMPT + FORMATTING_PROMPT + profile_prompt + history_prompt + type_prompt + ANTI_AI_PROMPT
     )
 
-    payload = {
-        "systemInstruction": {"parts": [{"text": system_instruction_text}]},
-        "contents": [{"role": "user", "parts": [{"text": f"Запрос пользователя: {prompt_text}"}]}]
-    }
-
-    connector = None
-    if proxy_url:
-        connector = ProxyConnector.from_url(
-            proxy_url, rdns=True, ssl=ssl.create_default_context(cafile=certifi.where())
+    try:
+        response = await ai_client.chat.completions.create(
+            model=AI_MODEL,
+            messages=[
+                {"role": "system", "content": system_instruction_text},
+                {"role": "user", "content": f"Запрос пользователя: {prompt_text}"}
+            ]
         )
-
-    # ИСПРАВЛЕНО: Добавлен connector_owner=True
-    async with ClientSession(connector=connector, connector_owner=True) as session:
-        async with session.post(url, json=payload) as response:
-            if response.status == 200:
-                data = await response.json()
-                try:
-                    text = data['candidates'][0]['content']['parts'][0]['text']
-                    return sanitize_for_telegram_html(text)
-                except (KeyError, IndexError):
-                    logger.error(f"Неожиданный формат ответа Gemini: {data}")
-                    raise Exception("Ошибка разбора ответа от Gemini")
-            else:
-                error_text = await response.text()
-                logger.error(f"Критическая ошибка от Google API (Статус {response.status}): {error_text}")
-                raise Exception(f"Gemini API вернул статус {response.status}")
+        text = response.choices[0].message.content
+        return sanitize_for_telegram_html(text)
+    except Exception as e:
+        logger.error(f"Ошибка при генерации через AITunnel: {e}")
+        raise Exception(f"Ошибка генерации: {e}")
 
 
 # --- ИСПРАВЛЕНО: Валидация на наличие текста (защита от фото/стикеров) ---
