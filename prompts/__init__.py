@@ -12,6 +12,7 @@
 - plan_prompt.py          — контент-план на 7 дней (get_plan_prompt)
 - cta_prompt.py           — разнообразие CTA окончаний постов (CTA_PROMPT)
 - story_prompt.py         — разнообразие сюжетов историй (STORY_PROMPT)
+- natural_flow_prompt.py  — естественный ритм текста (NATURAL_FLOW_PROMPT)
 - human_prompt.py         — живая человеческая речь (HUMAN_PROMPT)
 - readability_prompt.py   — уважение времени читателя (READABILITY_PROMPT)
 - human_editor_prompt.py  — финальный редактор текста (HUMAN_EDITOR_PROMPT)
@@ -32,6 +33,7 @@ from .personal_prompt import get_personal_prompt
 from .plan_prompt import get_plan_prompt
 from .cta_prompt import CTA_PROMPT
 from .story_prompt import STORY_PROMPT
+from .natural_flow_prompt import NATURAL_FLOW_PROMPT
 from .human_prompt import HUMAN_PROMPT
 from .readability_prompt import READABILITY_PROMPT
 from .human_editor_prompt import HUMAN_EDITOR_PROMPT
@@ -48,6 +50,7 @@ __all__ = [
     "get_plan_prompt",
     "CTA_PROMPT",
     "STORY_PROMPT",
+    "NATURAL_FLOW_PROMPT",
     "HUMAN_PROMPT",
     "READABILITY_PROMPT",
     "HUMAN_EDITOR_PROMPT",
