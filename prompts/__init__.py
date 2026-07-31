@@ -17,6 +17,7 @@
 - human_prompt.py         — живая человеческая речь (HUMAN_PROMPT)
 - readability_prompt.py   — уважение времени читателя (READABILITY_PROMPT)
 - human_editor_prompt.py  — финальный редактор текста (HUMAN_EDITOR_PROMPT)
+- final_quality_prompt.py — финальный контроль качества (FINAL_QUALITY_PROMPT)
 - anti_ai_prompt.py       — самопроверка на "AI-шность" (ANTI_AI_PROMPT)
 
 formatting_prompt.py не было в исходном ТЗ, но без него модель может начать
@@ -39,6 +40,7 @@ from .emotion_balance_prompt import EMOTION_BALANCE_PROMPT
 from .human_prompt import HUMAN_PROMPT
 from .readability_prompt import READABILITY_PROMPT
 from .human_editor_prompt import HUMAN_EDITOR_PROMPT
+from .final_quality_prompt import FINAL_QUALITY_PROMPT
 from .anti_ai_prompt import ANTI_AI_PROMPT
 
 __all__ = [
@@ -57,5 +59,6 @@ __all__ = [
     "HUMAN_PROMPT",
     "READABILITY_PROMPT",
     "HUMAN_EDITOR_PROMPT",
+    "FINAL_QUALITY_PROMPT",
     "ANTI_AI_PROMPT",
 ]
