@@ -799,40 +799,19 @@ async def handle_plan_day(callback: CallbackQuery, state: FSMContext) -> None:
         await callback.answer("День не найден в плане.", show_alert=True)
         return
 
-    await callback.answer()
-    status_message = await callback.message.answer(
-        f"🤖 <i>Пишу пост для дня {day_num}...</i>",
-        parse_mode="HTML",
+    # Сохраняем информацию о выбранном дне для генерации после выбора длины
+    await state.update_data(plan_day=day_num, plan_day_data=day)
+    await state.set_state(ContentStates.waiting_for_post_length)
+
+    text = (
+        "📏 <b>Какой объем поста хотите получить?</b>\n\n"
+        "⚡ <b>Короткий</b> — 400–600 символов, идеально для продающих постов и аносов\n\n"
+        "✨ <b>Стандартный</b> — 700–1000 символов, подходит для большинства публикаций\n\n"
+        "📖 <b>Развернутый</b> — 1000–1400 символов, для кейсов и глубоких историй"
     )
 
-    try:
-        profile = await get_profile(callback.from_user.id)
-        try:
-            history = await get_recent_generations(callback.from_user.id)
-        except Exception:
-            logger.exception("Не удалось получить историю генераций")
-            history = []
-
-        prompt = get_day_generation_prompt(day)
-        generated_post = await call_beauty_ai(prompt, day.content_type, profile, history, "medium")  # Для постов из контент-плана используем medium
-        await status_message.delete()
-
-        await send_long_message(
-            callback.message,
-            generated_post,
-            reply_markup=build_after_plan_post_keyboard(),
-            parse_mode="HTML",
-        )
-
-        try:
-            await save_generation(callback.from_user.id, day.content_type, day.title, generated_post)
-        except Exception:
-            logger.exception("Не удалось сохранить генерацию в историю")
-
-        await mark_day_completed(callback.from_user.id, day_num)
-    except Exception as e:
-        logger.error(f"Ошибка при генерации поста из контент-плана (день {day_num}): {e}")
-        await status_message.edit_text("❌ Не получилось сгенерировать пост. Попробуй ещё раз позже.")
+    await callback.message.answer(text, reply_markup=get_post_length_keyboard(), parse_mode="HTML")
+    await callback.answer()
 
 
 # --- ИСПРАВЛЕНО: removeprefix вместо split и двойная вложенность инлайн-кнопок ---
@@ -877,31 +856,76 @@ async def handle_post_length(callback: CallbackQuery, state: FSMContext) -> None
     post_length = callback.data.removeprefix("length_")  # short, medium, long
 
     await state.update_data(post_length=post_length)
-    await state.set_state(ContentStates.waiting_for_topic)
 
     user_data = await state.get_data()
-    chosen_type = user_data.get("chosen_type", "selling")
 
-    prompts = {
-        "selling": "<i>Пример: акция на ресницы, свободные окошки на завтра...</i>",
-        "expert": "<i>Пример: как ухаживать за бровями дома, топ-3 мифа...</i>",
-        "personal": "<i>Пример: как я пришла в бьюти, мой самый забавный случай...</i>"
-    }
+    # Проверяем, генерируем ли мы пост из контент-плана
+    if "plan_day" in user_data:
+        # Генерация из контент-плана
+        day_num = user_data.get("plan_day")
+        day = user_data.get("plan_day_data")
+        await state.clear()
 
-    cancel_keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Отмена (В меню)", callback_data="back_to_main")]
-        ]
-    )
+        await callback.answer()
+        status_message = await callback.message.answer(
+            f"🤖 <i>Пишу пост для дня {day_num}...</i>",
+            parse_mode="HTML",
+        )
 
-    text = (
-        f"📝 <b>Отлично! Напиши кратко тему или тезисы для поста.</b>\n\n"
-        f"{prompts.get(chosen_type, '')}\n\n"
-        f"ИИ сгенерирует текст специально под этот формат!"
-    )
+        try:
+            profile = await get_profile(callback.from_user.id)
+            try:
+                history = await get_recent_generations(callback.from_user.id)
+            except Exception:
+                logger.exception("Не удалось получить историю генераций")
+                history = []
 
-    await callback.message.answer(text, reply_markup=cancel_keyboard, parse_mode="HTML")
-    await callback.answer()
+            prompt = get_day_generation_prompt(day)
+            generated_post = await call_beauty_ai(prompt, day.content_type, profile, history, post_length)
+            await status_message.delete()
+
+            await send_long_message(
+                callback.message,
+                generated_post,
+                reply_markup=build_after_plan_post_keyboard(),
+                parse_mode="HTML",
+            )
+
+            try:
+                await save_generation(callback.from_user.id, day.content_type, day.title, generated_post)
+            except Exception:
+                logger.exception("Не удалось сохранить генерацию в историю")
+
+            await mark_day_completed(callback.from_user.id, day_num)
+        except Exception as e:
+            logger.error(f"Ошибка при генерации поста из контент-плана (день {day_num}): {e}")
+            await status_message.edit_text("❌ Не получилось сгенерировать пост. Попробуй ещё раз позже.")
+    else:
+        # Обычная генерация — переходим к вводу темы
+        await state.set_state(ContentStates.waiting_for_topic)
+
+        chosen_type = user_data.get("chosen_type", "selling")
+
+        prompts = {
+            "selling": "<i>Пример: акция на ресницы, свободные окошки на завтра...</i>",
+            "expert": "<i>Пример: как ухаживать за бровями дома, топ-3 мифа...</i>",
+            "personal": "<i>Пример: как я пришла в бьюти, мой самый забавный случай...</i>"
+        }
+
+        cancel_keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="❌ Отмена (В меню)", callback_data="back_to_main")]
+            ]
+        )
+
+        text = (
+            f"📝 <b>Отлично! Напиши кратко тему или тезисы для поста.</b>\n\n"
+            f"{prompts.get(chosen_type, '')}\n\n"
+            f"ИИ сгенерирует текст специально под этот формат!"
+        )
+
+        await callback.message.answer(text, reply_markup=cancel_keyboard, parse_mode="HTML")
+        await callback.answer()
 
 
 # ==================== ГЕНЕРАЦИЯ ЧЕРЕЗ AITUNNEL (OpenAI Compatible) ====================
