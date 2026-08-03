@@ -136,7 +136,7 @@ def parse_content_plan(full_text: str) -> list[PlanDay]:
     text = sanitize_for_telegram_html(full_text)
 
     day_pattern = re.compile(
-        r"(?:^|\n)\s*(?:<b>\s*)?(?:День|Day)\s*(\d)\s*[\.:\)\-]?(?:\s*</b>)?",
+        r"(?:^|\n)\s*(?:<b>\s*)?(?:День|Day)\s*№?\s*(\d)\s*[\.:\)\-]?(?:\s*</b>)?",
         re.IGNORECASE,
     )
     matches = list(day_pattern.finditer(text))

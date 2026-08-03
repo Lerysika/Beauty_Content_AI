@@ -39,6 +39,7 @@ from prompts import (
     get_personal_prompt,
     get_plan_prompt,
 )
+from prompts.post_length_prompt import get_post_length_prompt
 from prompts.history_prompt import build_history_prompt, CONTENT_TYPE_LABELS
 from utils.telegram_html import sanitize_for_telegram_html
 from utils.telegram_messages import send_long_message, send_long_text
@@ -89,6 +90,7 @@ ai_client = AsyncOpenAI(
 
 class ContentStates(StatesGroup):
     waiting_for_text_type = State()
+    waiting_for_post_length = State()
     waiting_for_topic = State()
     waiting_for_plan_topic = State()
 
@@ -152,6 +154,17 @@ def get_text_types_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="🧠 Полезный / Экспертный", callback_data="type_expert")],
             [InlineKeyboardButton(text="🎭 Личный / История", callback_data="type_personal")],
             [InlineKeyboardButton(text="↩️ Назад в меню", callback_data="back_to_main")]
+        ]
+    )
+
+
+def get_post_length_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="⚡ Короткий", callback_data="length_short")],
+            [InlineKeyboardButton(text="✨ Стандартный", callback_data="length_medium")],
+            [InlineKeyboardButton(text="📖 Развернутый", callback_data="length_long")],
+            [InlineKeyboardButton(text="↩️ Назад", callback_data="texts")]
         ]
     )
 
@@ -801,7 +814,7 @@ async def handle_plan_day(callback: CallbackQuery, state: FSMContext) -> None:
             history = []
 
         prompt = get_day_generation_prompt(day)
-        generated_post = await call_beauty_ai(prompt, day.content_type, profile, history)
+        generated_post = await call_beauty_ai(prompt, day.content_type, profile, history, "medium")  # Для постов из контент-плана используем medium
         await status_message.delete()
 
         await send_long_message(
@@ -846,7 +859,28 @@ async def handle_text_type(callback: CallbackQuery, state: FSMContext) -> None:
         return
 
     await state.update_data(chosen_type=text_type)
+    await state.set_state(ContentStates.waiting_for_post_length)
+
+    text = (
+        "📏 <b>Какой объем поста хотите получить?</b>\n\n"
+        "⚡ <b>Короткий</b> — 400–600 символов, идеально для продающих постов и аносов\n\n"
+        "✨ <b>Стандартный</b> — 700–1000 символов, подходит для большинства публикаций\n\n"
+        "📖 <b>Развернутый</b> — 1000–1400 символов, для кейсов и глубоких историй"
+    )
+
+    await callback.message.answer(text, reply_markup=get_post_length_keyboard(), parse_mode="HTML")
+    await callback.answer()
+
+
+@dp.callback_query(ContentStates.waiting_for_post_length, F.data.startswith("length_"))
+async def handle_post_length(callback: CallbackQuery, state: FSMContext) -> None:
+    post_length = callback.data.removeprefix("length_")  # short, medium, long
+
+    await state.update_data(post_length=post_length)
     await state.set_state(ContentStates.waiting_for_topic)
+
+    user_data = await state.get_data()
+    chosen_type = user_data.get("chosen_type", "selling")
 
     prompts = {
         "selling": "<i>Пример: акция на ресницы, свободные окошки на завтра...</i>",
@@ -854,9 +888,15 @@ async def handle_text_type(callback: CallbackQuery, state: FSMContext) -> None:
         "personal": "<i>Пример: как я пришла в бьюти, мой самый забавный случай...</i>"
     }
 
+    cancel_keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="❌ Отмена (В меню)", callback_data="back_to_main")]
+        ]
+    )
+
     text = (
         f"📝 <b>Отлично! Напиши кратко тему или тезисы для поста.</b>\n\n"
-        f"{prompts.get(text_type, '')}\n\n"
+        f"{prompts.get(chosen_type, '')}\n\n"
         f"ИИ сгенерирует текст специально под этот формат!"
     )
 
@@ -867,7 +907,7 @@ async def handle_text_type(callback: CallbackQuery, state: FSMContext) -> None:
 # ==================== ГЕНЕРАЦИЯ ЧЕРЕЗ AITUNNEL (OpenAI Compatible) ====================
 
 async def call_beauty_ai(
-    prompt_text: str, text_type: str, profile: dict | None = None, history: list[dict] | None = None
+    prompt_text: str, text_type: str, profile: dict | None = None, history: list[dict] | None = None, post_length: str = "medium"
 ) -> str:
     profile_prompt = build_profile_prompt(profile)
     history_prompt = build_history_prompt(history)
@@ -881,10 +921,19 @@ async def call_beauty_ai(
     else:  # personal
         type_prompt = get_personal_prompt()
 
-    # SYSTEM + STRATEGY + PROFILE + HISTORY + TYPE + STORY + NATURAL_FLOW + EMOTION_BALANCE + CTA + HUMAN + READABILITY + FORMATTING + ANTI_AI + HUMAN_EDITOR + FINAL_QUALITY
-    system_instruction_text = (
-        SYSTEM_PROMPT + STRATEGY_PROMPT + profile_prompt + history_prompt + type_prompt + STORY_PROMPT + NATURAL_FLOW_PROMPT + EMOTION_BALANCE_PROMPT + CTA_PROMPT + HUMAN_PROMPT + READABILITY_PROMPT + FORMATTING_PROMPT + ANTI_AI_PROMPT + HUMAN_EDITOR_PROMPT + FINAL_QUALITY_PROMPT
-    )
+    # Получаем prompt для длины поста (по умолчанию medium для совместимости)
+    length_prompt = get_post_length_prompt(post_length)
+
+    # SYSTEM + STRATEGY + PROFILE + HISTORY + TYPE + POST_LENGTH + STORY + NATURAL_FLOW + EMOTION_BALANCE + CTA + HUMAN + READABILITY + FORMATTING + ANTI_AI + HUMAN_EDITOR + FINAL_QUALITY
+    # Для контент-плана исключаем промпты, которые могут нарушить структуру (HUMAN_EDITOR, FINAL_QUALITY, POST_LENGTH)
+    if text_type == "plan":
+        system_instruction_text = (
+            SYSTEM_PROMPT + STRATEGY_PROMPT + profile_prompt + history_prompt + type_prompt + STORY_PROMPT + NATURAL_FLOW_PROMPT + EMOTION_BALANCE_PROMPT + CTA_PROMPT + HUMAN_PROMPT + READABILITY_PROMPT + FORMATTING_PROMPT + ANTI_AI_PROMPT
+        )
+    else:
+        system_instruction_text = (
+            SYSTEM_PROMPT + STRATEGY_PROMPT + profile_prompt + history_prompt + type_prompt + length_prompt + STORY_PROMPT + NATURAL_FLOW_PROMPT + EMOTION_BALANCE_PROMPT + CTA_PROMPT + HUMAN_PROMPT + READABILITY_PROMPT + FORMATTING_PROMPT + ANTI_AI_PROMPT + HUMAN_EDITOR_PROMPT + FINAL_QUALITY_PROMPT
+        )
 
     try:
         response = await ai_client.chat.completions.create(
@@ -912,6 +961,7 @@ async def topic_received(message: Message, state: FSMContext):
     user_topic = message.text
     user_data = await state.get_data()
     chosen_type = user_data.get("chosen_type", "selling")
+    post_length = user_data.get("post_length", "medium")  # По умолчанию medium для совместимости
     await state.clear()
 
     status_message = await message.answer("🤖 <i>ИИ адаптирует стиль под выбранный формат... Пишу пост...</i>", parse_mode="HTML")
@@ -926,7 +976,7 @@ async def topic_received(message: Message, state: FSMContext):
             logger.exception("Не удалось получить историю генераций")
             history = []
 
-        generated_post = await call_beauty_ai(user_topic, chosen_type, profile, history)
+        generated_post = await call_beauty_ai(user_topic, chosen_type, profile, history, post_length)
         await status_message.delete()
 
         after_keyboard = InlineKeyboardMarkup(
@@ -971,6 +1021,16 @@ async def plan_topic_received(message: Message, state: FSMContext):
             history = []
 
         generated_plan = await call_beauty_ai(user_topic, "plan", profile, history)
+        logger.info("RAW CONTENT PLAN:\n%s", generated_plan)
+
+        # Проверка наличия маркера "День 1" для валидации формата
+        if "День 1" not in generated_plan and "Day 1" not in generated_plan:
+            logger.warning("Ответ не содержит маркер 'День 1' или 'Day 1'. Выполняем повторную генерацию.")
+            # Добавляем дополнительную инструкцию для повторной генерации
+            retry_topic = user_topic + "\n\nВАЖНО: Предыдущий ответ не соответствовал обязательному формату. Повтори генерацию. Используй только формат: День 1, День 2, ..., День 7."
+            generated_plan = await call_beauty_ai(retry_topic, "plan", profile, history)
+            logger.info("RETRY RAW CONTENT PLAN:\n%s", generated_plan)
+
         await status_message.delete()
 
         try:
