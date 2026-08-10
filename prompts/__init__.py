@@ -13,12 +13,11 @@
 - cta_prompt.py           — разнообразие CTA окончаний постов (CTA_PROMPT)
 - story_prompt.py         — разнообразие сюжетов историй (STORY_PROMPT)
 - natural_flow_prompt.py  — естественный ритм текста (NATURAL_FLOW_PROMPT)
-- emotion_balance_prompt.py — естественные эмоции (EMOTION_BALANCE_PROMPT)
-- human_prompt.py         — живая человеческая речь (HUMAN_PROMPT)
-- readability_prompt.py   — уважение времени читателя (READABILITY_PROMPT)
-- human_editor_prompt.py  — финальный редактор текста (HUMAN_EDITOR_PROMPT)
+- emotion_balance_prompt.py — эмоциональный баланс (EMOTION_BALANCE_PROMPT)
+- human_style_prompt.py   — разговорный стиль речи (HUMAN_STYLE_PROMPT)
+- human_editor_prompt.py  — редактор с минимальными исправлениями (HUMAN_EDITOR_PROMPT)
 - final_quality_prompt.py — финальный контроль качества (FINAL_QUALITY_PROMPT)
-- anti_ai_prompt.py       — самопроверка на "AI-шность" (ANTI_AI_PROMPT)
+- anti_ai_prompt.py       — обнаружение AI-клише (ANTI_AI_PROMPT)
 
 formatting_prompt.py не было в исходном ТЗ, но без него модель может начать
 возвращать markdown вместо HTML-тегов и ломать отправку сообщений в Telegram
@@ -37,8 +36,7 @@ from .cta_prompt import CTA_PROMPT
 from .story_prompt import STORY_PROMPT
 from .natural_flow_prompt import NATURAL_FLOW_PROMPT
 from .emotion_balance_prompt import EMOTION_BALANCE_PROMPT
-from .human_prompt import HUMAN_PROMPT
-from .readability_prompt import READABILITY_PROMPT
+from .human_style_prompt import HUMAN_STYLE_PROMPT
 from .human_editor_prompt import HUMAN_EDITOR_PROMPT
 from .final_quality_prompt import FINAL_QUALITY_PROMPT
 from .anti_ai_prompt import ANTI_AI_PROMPT
@@ -56,8 +54,7 @@ __all__ = [
     "STORY_PROMPT",
     "NATURAL_FLOW_PROMPT",
     "EMOTION_BALANCE_PROMPT",
-    "HUMAN_PROMPT",
-    "READABILITY_PROMPT",
+    "HUMAN_STYLE_PROMPT",
     "HUMAN_EDITOR_PROMPT",
     "FINAL_QUALITY_PROMPT",
     "ANTI_AI_PROMPT",

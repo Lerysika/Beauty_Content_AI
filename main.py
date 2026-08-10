@@ -28,8 +28,7 @@ from prompts import (
     STORY_PROMPT,
     NATURAL_FLOW_PROMPT,
     EMOTION_BALANCE_PROMPT,
-    HUMAN_PROMPT,
-    READABILITY_PROMPT,
+    HUMAN_STYLE_PROMPT,
     HUMAN_EDITOR_PROMPT,
     FINAL_QUALITY_PROMPT,
     ANTI_AI_PROMPT,
@@ -948,15 +947,31 @@ async def call_beauty_ai(
     # Получаем prompt для длины поста (по умолчанию medium для совместимости)
     length_prompt = get_post_length_prompt(post_length)
 
-    # SYSTEM + STRATEGY + PROFILE + HISTORY + TYPE + POST_LENGTH + STORY + NATURAL_FLOW + EMOTION_BALANCE + CTA + HUMAN + READABILITY + FORMATTING + ANTI_AI + HUMAN_EDITOR + FINAL_QUALITY
+    # Общее правило приоритета Prompt:
+    # Каждый следующий Prompt может улучшать текст, но не имеет права нарушать ограничения предыдущих.
+    # Если выбран режим Short — нельзя увеличивать объем текста.
+    # Если выбран продающий пост — нельзя превращать его в экспертную статью.
+    # Если выбран личный пост — нельзя превращать его в обучающий материал.
+    # Если выбрана определенная длина — она имеет более высокий приоритет.
+
+    # Новый порядок приоритета Prompt:
+    # SYSTEM → PROFILE → HISTORY → TYPE → POST_LENGTH → STORY → CTA → HUMAN_STYLE → NATURAL_FLOW → EMOTION_BALANCE → ANTI_AI → HUMAN_EDITOR → FINAL_QUALITY → FORMATTING
+
     # Для контент-плана исключаем промпты, которые могут нарушить структуру (HUMAN_EDITOR, FINAL_QUALITY, POST_LENGTH)
     if text_type == "plan":
         system_instruction_text = (
-            SYSTEM_PROMPT + STRATEGY_PROMPT + profile_prompt + history_prompt + type_prompt + STORY_PROMPT + NATURAL_FLOW_PROMPT + EMOTION_BALANCE_PROMPT + CTA_PROMPT + HUMAN_PROMPT + READABILITY_PROMPT + FORMATTING_PROMPT + ANTI_AI_PROMPT
+            SYSTEM_PROMPT + STRATEGY_PROMPT + profile_prompt + history_prompt + type_prompt + STORY_PROMPT + CTA_PROMPT + HUMAN_STYLE_PROMPT + NATURAL_FLOW_PROMPT + EMOTION_BALANCE_PROMPT + ANTI_AI_PROMPT + FORMATTING_PROMPT
+        )
+    elif post_length == "short":
+        # Для режима Short исключаем STRATEGY_PROMPT (требует полноценную структуру)
+        # Оставляем только prompt, совместимые с мини-публикациями
+        system_instruction_text = (
+            SYSTEM_PROMPT + profile_prompt + history_prompt + type_prompt + length_prompt + STORY_PROMPT + HUMAN_STYLE_PROMPT + NATURAL_FLOW_PROMPT + EMOTION_BALANCE_PROMPT + ANTI_AI_PROMPT + HUMAN_EDITOR_PROMPT + FINAL_QUALITY_PROMPT + FORMATTING_PROMPT
         )
     else:
+        # Для режимов Medium и Long используем полный набор prompt
         system_instruction_text = (
-            SYSTEM_PROMPT + STRATEGY_PROMPT + profile_prompt + history_prompt + type_prompt + length_prompt + STORY_PROMPT + NATURAL_FLOW_PROMPT + EMOTION_BALANCE_PROMPT + CTA_PROMPT + HUMAN_PROMPT + READABILITY_PROMPT + FORMATTING_PROMPT + ANTI_AI_PROMPT + HUMAN_EDITOR_PROMPT + FINAL_QUALITY_PROMPT
+            SYSTEM_PROMPT + STRATEGY_PROMPT + profile_prompt + history_prompt + type_prompt + length_prompt + STORY_PROMPT + CTA_PROMPT + HUMAN_STYLE_PROMPT + NATURAL_FLOW_PROMPT + EMOTION_BALANCE_PROMPT + ANTI_AI_PROMPT + HUMAN_EDITOR_PROMPT + FINAL_QUALITY_PROMPT + FORMATTING_PROMPT
         )
 
     try:
