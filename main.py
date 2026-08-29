@@ -4,6 +4,7 @@ import os
 import ssl
 from datetime import datetime
 from openai import AsyncOpenAI
+from asyncio import Semaphore
 
 import certifi
 from aiohttp import ClientSession
@@ -21,11 +22,9 @@ from supabase import Client, create_client
 
 # --- ЭТАП 2: промпты вынесены в отдельный пакет prompts/ ---
 from prompts import (
-    SYSTEM_PROMPT,
     STRATEGY_PROMPT,
     FORMATTING_PROMPT,
     CTA_PROMPT,
-    STORY_PROMPT,
     NATURAL_FLOW_PROMPT,
     EMOTION_BALANCE_PROMPT,
     HUMAN_STYLE_PROMPT,
@@ -38,10 +37,15 @@ from prompts import (
     get_personal_prompt,
     get_plan_prompt,
 )
+from prompts.system_prompt import get_system_prompt
+from prompts.story_prompt import get_story_prompt
 from prompts.post_length_prompt import get_post_length_prompt
 from prompts.history_prompt import build_history_prompt, CONTENT_TYPE_LABELS
 from utils.telegram_html import sanitize_for_telegram_html
 from utils.telegram_messages import send_long_message, send_long_text
+from utils.length_validator import get_length_limits, count_chars, validate_length, fallback_truncate
+from utils.api_retry import retry_with_backoff
+from services.editor_service import editor_pass
 from services.generation_history import (
     save_generation,
     get_recent_generations,
@@ -78,6 +82,9 @@ logger = logging.getLogger(__name__)
 
 dp = Dispatcher()
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
+# Semaphore для ограничения одновременных AI-запросов
+ai_semaphore = Semaphore(5)  # Максимум 5 одновременных запросов
 
 ai_client = AsyncOpenAI(
     api_key=AI_API_KEY,
@@ -934,18 +941,20 @@ async def call_beauty_ai(
 ) -> str:
     profile_prompt = build_profile_prompt(profile)
     history_prompt = build_history_prompt(history)
+    system_prompt = get_system_prompt(post_length)
 
     if text_type == "plan":
         type_prompt = get_plan_prompt()
     elif text_type == "selling":
-        type_prompt = get_selling_prompt()
+        type_prompt = get_selling_prompt(post_length=post_length)
     elif text_type == "expert":
-        type_prompt = get_expert_prompt()
+        type_prompt = get_expert_prompt(post_length=post_length)
     else:  # personal
-        type_prompt = get_personal_prompt()
+        type_prompt = get_personal_prompt(post_length=post_length)
 
     # Получаем prompt для длины поста (по умолчанию medium для совместимости)
     length_prompt = get_post_length_prompt(post_length)
+    story_prompt = get_story_prompt(post_length)
 
     # Общее правило приоритета Prompt:
     # Каждый следующий Prompt может улучшать текст, но не имеет права нарушать ограничения предыдущих.
@@ -960,33 +969,80 @@ async def call_beauty_ai(
     # Для контент-плана исключаем промпты, которые могут нарушить структуру (HUMAN_EDITOR, FINAL_QUALITY, POST_LENGTH)
     if text_type == "plan":
         system_instruction_text = (
-            SYSTEM_PROMPT + STRATEGY_PROMPT + profile_prompt + history_prompt + type_prompt + STORY_PROMPT + CTA_PROMPT + HUMAN_STYLE_PROMPT + NATURAL_FLOW_PROMPT + EMOTION_BALANCE_PROMPT + ANTI_AI_PROMPT + FORMATTING_PROMPT
+            system_prompt + STRATEGY_PROMPT + profile_prompt + history_prompt + type_prompt + story_prompt + CTA_PROMPT + HUMAN_STYLE_PROMPT + NATURAL_FLOW_PROMPT + EMOTION_BALANCE_PROMPT + ANTI_AI_PROMPT + FORMATTING_PROMPT
         )
     elif post_length == "short":
-        # Для режима Short исключаем STRATEGY_PROMPT (требует полноценную структуру)
+        # Для режима Short исключаем STRATEGY_PROMPT (требует полноценную структуру) и CTA_PROMPT (необязательный)
         # Оставляем только prompt, совместимые с мини-публикациями
         system_instruction_text = (
-            SYSTEM_PROMPT + profile_prompt + history_prompt + type_prompt + length_prompt + STORY_PROMPT + HUMAN_STYLE_PROMPT + NATURAL_FLOW_PROMPT + EMOTION_BALANCE_PROMPT + ANTI_AI_PROMPT + HUMAN_EDITOR_PROMPT + FINAL_QUALITY_PROMPT + FORMATTING_PROMPT
+            system_prompt + profile_prompt + history_prompt + type_prompt + length_prompt + story_prompt + HUMAN_STYLE_PROMPT + NATURAL_FLOW_PROMPT + EMOTION_BALANCE_PROMPT + ANTI_AI_PROMPT + HUMAN_EDITOR_PROMPT + FINAL_QUALITY_PROMPT + FORMATTING_PROMPT
         )
     else:
         # Для режимов Medium и Long используем полный набор prompt
         system_instruction_text = (
-            SYSTEM_PROMPT + STRATEGY_PROMPT + profile_prompt + history_prompt + type_prompt + length_prompt + STORY_PROMPT + CTA_PROMPT + HUMAN_STYLE_PROMPT + NATURAL_FLOW_PROMPT + EMOTION_BALANCE_PROMPT + ANTI_AI_PROMPT + HUMAN_EDITOR_PROMPT + FINAL_QUALITY_PROMPT + FORMATTING_PROMPT
+            system_prompt + STRATEGY_PROMPT + profile_prompt + history_prompt + type_prompt + length_prompt + story_prompt + CTA_PROMPT + HUMAN_STYLE_PROMPT + NATURAL_FLOW_PROMPT + EMOTION_BALANCE_PROMPT + ANTI_AI_PROMPT + HUMAN_EDITOR_PROMPT + FINAL_QUALITY_PROMPT + FORMATTING_PROMPT
         )
 
-    try:
-        response = await ai_client.chat.completions.create(
-            model=AI_MODEL,
-            messages=[
-                {"role": "system", "content": system_instruction_text},
-                {"role": "user", "content": f"Запрос пользователя: {prompt_text}"}
-            ]
-        )
-        text = response.choices[0].message.content
-        return sanitize_for_telegram_html(text)
-    except Exception as e:
-        logger.error(f"Ошибка при генерации через AITunnel: {e}")
-        raise Exception(f"Ошибка генерации: {e}")
+    async with ai_semaphore:
+        try:
+            response = await retry_with_backoff(
+                ai_client.chat.completions.create,
+                model=AI_MODEL,
+                messages=[
+                    {"role": "system", "content": system_instruction_text},
+                    {"role": "user", "content": f"Запрос пользователя: {prompt_text}"}
+                ],
+                max_retries=3,
+                base_delay=1.0,
+                max_delay=8.0
+            )
+            text = response.choices[0].message.content
+            text = sanitize_for_telegram_html(text)
+            
+            # Проверка длины (только для обычных постов, не для контент-плана)
+            if text_type != "plan":
+                is_valid, actual_length, hard_max = validate_length(text, post_length)
+                
+                logger.info(
+                    f"Length check: post_length={post_length}, target_max={hard_max}, "
+                    f"generated_length={actual_length}, is_valid={is_valid}"
+                )
+                
+                # Если текст превышает лимит, запускаем editor-pass
+                if not is_valid:
+                    logger.info(f"Editor pass triggered: text too long ({actual_length} > {hard_max})")
+                    
+                    try:
+                        text = await retry_with_backoff(
+                            editor_pass,
+                            text, post_length, ai_client, AI_MODEL,
+                            max_retries=2,
+                            base_delay=1.0,
+                            max_delay=4.0
+                        )
+                        text = sanitize_for_telegram_html(text)
+                        
+                        # Повторная проверка после editor-pass
+                        is_valid_after, actual_length_after, _ = validate_length(text, post_length)
+                        logger.info(
+                            f"After editor pass: length={actual_length_after}, is_valid={is_valid_after}"
+                        )
+                        
+                        # Если всё ещё превышает лимит, используем fallback
+                        if not is_valid_after:
+                            logger.warning(f"Text still too long after editor pass, using fallback")
+                            text = fallback_truncate(text, hard_max)
+                            final_length = count_chars(text)
+                            logger.info(f"After fallback: length={final_length}")
+                            
+                    except Exception as e:
+                        logger.error(f"Editor pass failed: {e}, using fallback")
+                        text = fallback_truncate(text, hard_max)
+            
+            return text
+        except Exception as e:
+            logger.error(f"Ошибка при генерации через AITunnel: {e}")
+            raise Exception(f"Ошибка генерации: {e}")
 
 
 # --- ИСПРАВЛЕНО: Валидация на наличие текста (защита от фото/стикеров) ---

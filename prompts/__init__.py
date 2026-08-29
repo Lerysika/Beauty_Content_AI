@@ -24,7 +24,7 @@ formatting_prompt.py не было в исходном ТЗ, но без нег�
 (бот использует parse_mode="HTML").
 """
 
-from .system_prompt import SYSTEM_PROMPT
+from .system_prompt import SYSTEM_PROMPT, get_system_prompt
 from .strategy_prompt import STRATEGY_PROMPT
 from .formatting_prompt import FORMATTING_PROMPT
 from .profile_prompt import build_profile_prompt
@@ -33,7 +33,7 @@ from .expert_prompt import get_expert_prompt
 from .personal_prompt import get_personal_prompt
 from .plan_prompt import get_plan_prompt
 from .cta_prompt import CTA_PROMPT
-from .story_prompt import STORY_PROMPT
+from .story_prompt import get_story_prompt
 from .natural_flow_prompt import NATURAL_FLOW_PROMPT
 from .emotion_balance_prompt import EMOTION_BALANCE_PROMPT
 from .human_style_prompt import HUMAN_STYLE_PROMPT
@@ -43,6 +43,7 @@ from .anti_ai_prompt import ANTI_AI_PROMPT
 
 __all__ = [
     "SYSTEM_PROMPT",
+    "get_system_prompt",
     "STRATEGY_PROMPT",
     "FORMATTING_PROMPT",
     "build_profile_prompt",
@@ -51,7 +52,7 @@ __all__ = [
     "get_personal_prompt",
     "get_plan_prompt",
     "CTA_PROMPT",
-    "STORY_PROMPT",
+    "get_story_prompt",
     "NATURAL_FLOW_PROMPT",
     "EMOTION_BALANCE_PROMPT",
     "HUMAN_STYLE_PROMPT",
