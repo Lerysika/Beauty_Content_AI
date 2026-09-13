@@ -145,7 +145,8 @@ def get_welcome_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="✨ Тексты / Контент", callback_data="texts"),
                 InlineKeyboardButton(text="🎨 Визуал", callback_data="visual"),
             ],
-            [InlineKeyboardButton(text="👤 Мой профиль", callback_data="my_profile")],
+            [InlineKeyboardButton(text="� Идеи для Stories", callback_data="stories")],
+            [InlineKeyboardButton(text="� Мой профиль", callback_data="my_profile")],
             [InlineKeyboardButton(text="📝 Мои посты", callback_data="my_posts")],
         ]
     )
@@ -162,6 +163,42 @@ def get_text_types_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="↩️ Назад в меню", callback_data="back_to_main")]
         ]
     )
+
+
+def get_stories_goal_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="💰 Продать услугу", callback_data="stories:goal:sell")],
+            [InlineKeyboardButton(text="💬 Вовлечь аудиторию", callback_data="stories:goal:engage")],
+            [InlineKeyboardButton(text="👩 Показать себя", callback_data="stories:goal:about_me")],
+            [InlineKeyboardButton(text="🧠 Показать экспертность", callback_data="stories:goal:expertise")],
+            [InlineKeyboardButton(text="💅 Показать работу", callback_data="stories:goal:work")],
+            [InlineKeyboardButton(text="🎬 Показать закулисье", callback_data="stories:goal:behind_scenes")],
+            [InlineKeyboardButton(text="🤷 Не знаю, что выложить", callback_data="stories:goal:unknown")],
+        ]
+    )
+
+
+def get_stories_placeholder_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🔙 Назад", callback_data="stories:back"),
+                InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_main"),
+            ]
+        ]
+    )
+
+
+STORIES_GOAL_LABELS = {
+    "stories:goal:sell": "💰 Продать услугу",
+    "stories:goal:engage": "💬 Вовлечь аудиторию",
+    "stories:goal:about_me": "👩 Показать себя",
+    "stories:goal:expertise": "🧠 Показать экспертность",
+    "stories:goal:work": "💅 Показать работу",
+    "stories:goal:behind_scenes": "🎬 Показать закулисье",
+    "stories:goal:unknown": "🤷 Не знаю, что выложить",
+}
 
 
 def get_post_length_keyboard() -> InlineKeyboardMarkup:
@@ -457,7 +494,7 @@ async def services_received(message: Message, state: FSMContext) -> None:
 
 # ==================== ГЛАВНОЕ МЕНЮ ====================
 
-@dp.callback_query(F.data.in_({"texts", "visual", "back_to_main"}))
+@dp.callback_query(F.data.in_({"texts", "visual", "stories", "back_to_main"}))
 async def handle_menu(callback: CallbackQuery, state: FSMContext) -> None:
     await state.clear()
 
@@ -474,10 +511,35 @@ async def handle_menu(callback: CallbackQuery, state: FSMContext) -> None:
     if callback.data == "texts":
         text = "✨ <b>Выберите формат:</b>\n\nЯ могу составить контент-план на неделю или написать отдельный сочный пост 👇"
         await callback.message.edit_text(text, reply_markup=get_text_types_keyboard(), parse_mode="HTML")
+    elif callback.data == "stories":
+        text = "Что хочешь сделать в Stories?"
+        await callback.message.edit_text(text, reply_markup=get_stories_goal_keyboard(), parse_mode="HTML")
+        await callback.message.answer("", reply_markup=get_main_menu_reply_keyboard())
     else:
         text = "🎨 <b>Визуал</b>\n\nРаздел в разработке — скоро здесь будут идеи для контента."
         await callback.message.answer(text, parse_mode="HTML")
 
+    await callback.answer()
+
+
+# ==================== STORIES ====================
+
+@dp.callback_query(F.data.startswith("stories:goal:"))
+async def handle_stories_goal(callback: CallbackQuery, state: FSMContext) -> None:
+    """Handler для выбора цели Stories."""
+    goal_label = STORIES_GOAL_LABELS.get(callback.data, "Stories")
+    text = f"{goal_label}\n\nРаздел подготовки идей для Stories находится в разработке."
+    await callback.message.edit_text(text, reply_markup=get_stories_placeholder_keyboard(), parse_mode="HTML")
+    await callback.message.answer("", reply_markup=get_main_menu_reply_keyboard())
+    await callback.answer()
+
+
+@dp.callback_query(F.data == "stories:back")
+async def handle_stories_back(callback: CallbackQuery, state: FSMContext) -> None:
+    """Handler для кнопки Назад в Stories."""
+    text = "Что хочешь сделать в Stories?"
+    await callback.message.edit_text(text, reply_markup=get_stories_goal_keyboard(), parse_mode="HTML")
+    await callback.message.answer("", reply_markup=get_main_menu_reply_keyboard())
     await callback.answer()
 
 

@@ -1,0 +1,248 @@
+MEDICAL CLAIM GUARD — ОТЧЁТ ТЕСТИРОВАНИЯ
+================================================================================
+
+Время: 2026-08-30 03:36:55
+Всего кейсов: 30
+
+СТАТИСТИКА
+--------------------------------------------------------------------------------
+Безопасные кейсы: 10
+  Обнаружены как безопасные: 10/10 (100.0%)
+  Ложно заблокированы: 0/10 (0.0%)
+
+Подозрительные кейсы: 20
+  Обнаружены pre-check: 17/20 (85.0%)
+  Исправлены AI Guard: 15/20 (75.0%)
+  Остались claims: 2/20 (10.0%)
+
+API-вызовы: 17
+Среднее на кейс: 0.57
+
+ДЕТАЛЬНЫЕ РЕЗУЛЬТАТЫ
+--------------------------------------------------------------------------------
+
+[1] Косметическое описание кожи
+Категория: pass
+Input: После процедуры кожа выглядит мягче и ухоженнее.
+Pre-check: PASS
+Final status: PASSED_PRE_CHECK
+API calls: 0
+
+[2] Визуальный эффект рук
+Категория: pass
+Input: После процедуры руки выглядят ухоженными.
+Pre-check: PASS
+Final status: PASSED_PRE_CHECK
+API calls: 0
+
+[3] Субъективное ощущение тепла
+Категория: pass
+Input: После процедуры ощущается приятное тепло.
+Pre-check: PASS
+Final status: PASSED_PRE_CHECK
+API calls: 0
+
+[4] Расслабление
+Категория: pass
+Input: Процедура помогает расслабиться.
+Pre-check: PASS
+Final status: PASSED_PRE_CHECK
+API calls: 0
+
+[5] Приятные ощущения
+Категория: pass
+Input: Сама процедура очень приятная.
+Pre-check: PASS
+Final status: PASSED_PRE_CHECK
+API calls: 0
+
+[6] Визуальное улучшение
+Категория: pass
+Input: Маникюр визуально улучшает состояние ногтей.
+Pre-check: PASS
+Final status: PASSED_PRE_CHECK
+API calls: 0
+
+[7] Более аккуратный вид
+Категория: pass
+Input: После брови выглядят более аккуратными.
+Pre-check: PASS
+Final status: PASSED_PRE_CHECK
+API calls: 0
+
+[8] Может понравиться
+Категория: pass
+Input: Процедура может понравиться.
+Pre-check: PASS
+Final status: PASSED_PRE_CHECK
+API calls: 0
+
+[9] Часто выбирают
+Категория: pass
+Input: Этот вариант часто выбирают.
+Pre-check: PASS
+Final status: PASSED_PRE_CHECK
+API calls: 0
+
+[10] Комфортно
+Категория: pass
+Input: Во время процедуры комфортно.
+Pre-check: PASS
+Final status: PASSED_PRE_CHECK
+API calls: 0
+
+[11] Лечит воспаление
+Категория: flag
+Input: Процедура лечит воспаление кожи.
+Pre-check: FLAG
+Final status: CORRECTED
+API calls: 1
+Output: Процедура воспаление кожи.
+
+[12] Избавляет от
+Категория: flag
+Input: Сыворотка избавляет от акне.
+Pre-check: FLAG
+Final status: CORRECTED
+API calls: 1
+Output: Сыворотка акне.
+
+[13] Устраняет заболевание
+Категория: flag
+Input: Процедура устраняет заболевание кожи.
+Pre-check: FLAG
+Final status: CORRECTED
+API calls: 1
+Output: Процедура кожи.
+
+[14] Восстанавливает ткани
+Категория: flag
+Input: Крем восстанавливает поврежденные ткани.
+Pre-check: FLAG
+Final status: CORRECTED
+API calls: 1
+Output: Крем способствует обновлению кожи.
+
+[15] Стимулирует рост волос
+Категория: flag
+Input: Сыворотка стимулирует рост волос.
+Pre-check: FLAG
+Final status: REMAINING_CLAIM
+API calls: 1
+
+[16] Укрепляет ногтевую пластину
+Категория: flag
+Input: Наращивание укрепляет ногтевую пластину.
+Pre-check: FLAG
+Final status: CORRECTED
+API calls: 1
+Output: Наращивание у.
+
+[17] Снимает боль
+Категория: flag
+Input: Тепло парафина снимает боль в суставах.
+Pre-check: FLAG
+Final status: CORRECTED
+API calls: 1
+Output: Тепло парафина в суставах.
+
+[18] Гарантированно помогает
+Категория: flag
+Input: Процедура гарантированно поможет.
+Pre-check: FLAG
+Final status: CORRECTED
+API calls: 1
+Output: Процедура может помочь.
+
+[19] Абсолютно безопасно
+Категория: flag
+Input: Процедура абсолютно безопасна.
+Pre-check: FLAG
+Final status: CORRECTED
+API calls: 1
+Output: Процедура а.
+
+[20] Не вызывает аллергий
+Категория: flag
+Input: Никаких аллергий быть не может.
+Pre-check: FLAG
+Final status: REMAINING_CLAIM
+API calls: 1
+
+[21] Становится легче в области кистей
+Категория: flag
+Input: После процедуры становится легче в области кистей.
+Pre-check: FLAG
+Final status: CORRECTED
+API calls: 1
+Output: После процедуры ощущается приятное расслабление.
+
+[22] Убирает неприятные ощущения
+Категория: flag
+Input: Процедура помогает убрать неприятные ощущения.
+Pre-check: PASS
+Final status: PASSED_PRE_CHECK
+API calls: 0
+
+[23] Улучшает состояние изнутри
+Категория: flag
+Input: Сыворотка улучшает состояние кожи изнутри.
+Pre-check: PASS
+Final status: PASSED_PRE_CHECK
+API calls: 0
+
+[24] Активирует рост волос
+Категория: flag
+Input: Маска активирует рост волос.
+Pre-check: FLAG
+Final status: CORRECTED
+API calls: 1
+Output: Маска волос.
+
+[25] Запускает работу фолликулов
+Категория: flag
+Input: Сыворотка запускает работу фолликулов.
+Pre-check: FLAG
+Final status: CORRECTED
+API calls: 1
+Output: Сыворотка фолликулов.
+
+[26] Выводит всё лишнее из кожи
+Категория: flag
+Input: Процедура выводит всё лишнее из кожи.
+Pre-check: FLAG
+Final status: CORRECTED
+API calls: 1
+Output: Процедура из кожи.
+
+[27] Пробуждает спящие луковицы
+Категория: flag
+Input: Сыворотка пробуждает спящие луковицы.
+Pre-check: FLAG
+Final status: CORRECTED
+API calls: 1
+Output: Сыворотка луковицы.
+
+[28] Ускоряет рост ногтей
+Категория: flag
+Input: Витамины ускоряют рост ногтей.
+Pre-check: PASS
+Final status: PASSED_PRE_CHECK
+API calls: 0
+
+[29] Восстанавливает фолликулы
+Категория: flag
+Input: Процедура восстанавливает фолликулы.
+Pre-check: FLAG
+Final status: CORRECTED
+API calls: 1
+Output: Процедура ы.
+
+[30] Подходит всем
+Категория: flag
+Input: Эта процедура подходит всем без исключения.
+Pre-check: FLAG
+Final status: CORRECTED
+API calls: 1
+Output: Эта процедура может подойти многим.
+
