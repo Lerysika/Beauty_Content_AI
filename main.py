@@ -38,6 +38,7 @@ from prompts import (
     get_plan_prompt,
 )
 from prompts.system_prompt import get_system_prompt
+from keyboards.reply import get_main_menu_reply_keyboard
 from prompts.story_prompt import get_story_prompt
 from prompts.post_length_prompt import get_post_length_prompt
 from prompts.history_prompt import build_history_prompt, CONTENT_TYPE_LABELS
@@ -121,6 +122,12 @@ class ProfileEditStates(StatesGroup):
     editing_services_to_promote = State()
 
 
+# --- STORIES: FSM для Stories ---
+class StoriesStates(StatesGroup):
+    waiting_for_goal = State()
+    viewing_ideas = State()
+
+
 EDIT_FIELD_PROMPTS = {
     "name": "🙋 <b>Как тебя теперь называть?</b>",
     "experience": "<b>Какой у тебя стаж в профессии?</b>\n\n<i>Например: 2 года, 6 месяцев, только начинаю</i>",
@@ -182,6 +189,34 @@ def get_stories_goal_keyboard() -> InlineKeyboardMarkup:
 def get_stories_placeholder_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🔙 Назад", callback_data="stories:back"),
+                InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_main"),
+            ]
+        ]
+    )
+
+
+def get_stories_ideas_keyboard(ideas: list[dict]) -> InlineKeyboardMarkup:
+    """Создаёт клавиатуру с кнопками для каждой идеи."""
+    buttons = []
+    for idx, idea in enumerate(ideas):
+        title = idea.get("title", f"Идея {idx + 1}")
+        buttons.append([InlineKeyboardButton(text=title, callback_data=f"stories:idea:{idx}")])
+
+    # Добавляем навигационные кнопки
+    buttons.append([
+        InlineKeyboardButton(text="🔙 Назад", callback_data="stories:back"),
+        InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_main"),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_stories_error_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура для экрана ошибки."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🔄 Попробовать ещё раз", callback_data="stories:retry")],
             [
                 InlineKeyboardButton(text="🔙 Назад", callback_data="stories:back"),
                 InlineKeyboardButton(text="🏠 Главное меню", callback_data="back_to_main"),
@@ -514,7 +549,6 @@ async def handle_menu(callback: CallbackQuery, state: FSMContext) -> None:
     elif callback.data == "stories":
         text = "Что хочешь сделать в Stories?"
         await callback.message.edit_text(text, reply_markup=get_stories_goal_keyboard(), parse_mode="HTML")
-        await callback.message.answer("", reply_markup=get_main_menu_reply_keyboard())
     else:
         text = "🎨 <b>Визуал</b>\n\nРаздел в разработке — скоро здесь будут идеи для контента."
         await callback.message.answer(text, parse_mode="HTML")
@@ -527,19 +561,78 @@ async def handle_menu(callback: CallbackQuery, state: FSMContext) -> None:
 @dp.callback_query(F.data.startswith("stories:goal:"))
 async def handle_stories_goal(callback: CallbackQuery, state: FSMContext) -> None:
     """Handler для выбора цели Stories."""
+    await state.clear()
+    await state.set_state(StoriesStates.viewing_ideas)
+
+    # Извлекаем цель из callback_data
+    goal = callback.data.replace("stories:goal:", "")
     goal_label = STORIES_GOAL_LABELS.get(callback.data, "Stories")
-    text = f"{goal_label}\n\nРаздел подготовки идей для Stories находится в разработке."
-    await callback.message.edit_text(text, reply_markup=get_stories_placeholder_keyboard(), parse_mode="HTML")
-    await callback.message.answer("", reply_markup=get_main_menu_reply_keyboard())
+
+    # Показываем сообщение о загрузке
+    await callback.message.edit_text("🤖 Придумываю идеи для Stories...", reply_markup=None)
     await callback.answer()
+
+    try:
+        # Генерируем идеи
+        ideas = await generate_story_ideas(callback.from_user.id, goal)
+
+        # Сохраняем в FSM
+        await state.update_data(stories_goal=goal, stories_ideas=ideas)
+
+        # Формируем текст с идеями
+        text = f"{goal_label}\n\n"
+        for idx, idea in enumerate(ideas, 1):
+            title = idea.get("title", f"Идея {idx}")
+            description = idea.get("description", "")
+            text += f"{idx}. {title}\n{description}\n\n"
+
+        text += "Выбери идею 👇"
+
+        # Показываем идеи
+        await callback.message.edit_text(text, reply_markup=get_stories_ideas_keyboard(ideas), parse_mode="HTML")
+
+    except Exception as e:
+        logger.error(f"Ошибка при генерации идей: {e}")
+        text = "❌ Не получилось придумать идеи. Попробуй ещё раз."
+        await callback.message.edit_text(text, reply_markup=get_stories_error_keyboard(), parse_mode="HTML")
+
+
+@dp.callback_query(F.data == "stories:retry")
+async def handle_stories_retry(callback: CallbackQuery, state: FSMContext) -> None:
+    """Handler для повторной генерации идей."""
+    user_data = await state.get_data()
+    goal = user_data.get("stories_goal", "unknown")
+    goal_label = STORIES_GOAL_LABELS.get(f"stories:goal:{goal}", "Stories")
+
+    await callback.message.edit_text("🤖 Придумываю идеи для Stories...", reply_markup=None)
+    await callback.answer()
+
+    try:
+        ideas = await generate_story_ideas(callback.from_user.id, goal)
+        await state.update_data(stories_ideas=ideas)
+
+        text = f"{goal_label}\n\n"
+        for idx, idea in enumerate(ideas, 1):
+            title = idea.get("title", f"Идея {idx}")
+            description = idea.get("description", "")
+            text += f"{idx}. {title}\n{description}\n\n"
+
+        text += "Выбери идею 👇"
+
+        await callback.message.edit_text(text, reply_markup=get_stories_ideas_keyboard(ideas), parse_mode="HTML")
+
+    except Exception as e:
+        logger.error(f"Ошибка при повторной генерации идей: {e}")
+        text = "❌ Не получилось придумать идеи. Попробуй ещё раз."
+        await callback.message.edit_text(text, reply_markup=get_stories_error_keyboard(), parse_mode="HTML")
 
 
 @dp.callback_query(F.data == "stories:back")
 async def handle_stories_back(callback: CallbackQuery, state: FSMContext) -> None:
     """Handler для кнопки Назад в Stories."""
+    await state.clear()
     text = "Что хочешь сделать в Stories?"
     await callback.message.edit_text(text, reply_markup=get_stories_goal_keyboard(), parse_mode="HTML")
-    await callback.message.answer("", reply_markup=get_main_menu_reply_keyboard())
     await callback.answer()
 
 
@@ -1105,6 +1198,79 @@ async def call_beauty_ai(
         except Exception as e:
             logger.error(f"Ошибка при генерации через AITunnel: {e}")
             raise Exception(f"Ошибка генерации: {e}")
+
+
+# ==================== STORIES IDEAS GENERATION ====================
+
+async def generate_story_ideas(
+    telegram_id: int,
+    goal: str,
+) -> list[dict]:
+    """
+    Генерирует 3–5 идей для Stories на основе цели и профиля пользователя.
+
+    Args:
+        telegram_id: ID пользователя в Telegram
+        goal: Цель Stories (sell, engage, about_me, expertise, work, behind_scenes, unknown)
+
+    Returns:
+        Список словарей с идеями: [{"title": "...", "description": "..."}, ...]
+    """
+    from prompts.stories_ideas_prompt import get_stories_ideas_prompt
+    import json
+
+    # Получаем профиль пользователя
+    profile = await get_profile(telegram_id)
+    if not profile:
+        raise Exception("Профиль не найден")
+
+    # Получаем историю генераций
+    history = await get_recent_generations(telegram_id, limit=10)
+
+    # Собираем промпт
+    profile_prompt = build_profile_prompt(profile)
+    history_prompt = build_history_prompt(history)
+    stories_prompt = get_stories_ideas_prompt(goal)
+
+    system_instruction_text = profile_prompt + history_prompt + stories_prompt
+
+    async with ai_semaphore:
+        try:
+            response = await retry_with_backoff(
+                ai_client.chat.completions.create,
+                model=AI_MODEL,
+                messages=[
+                    {"role": "system", "content": system_instruction_text},
+                    {"role": "user", "content": "Предложи идеи для Stories"}
+                ],
+                max_retries=3,
+                base_delay=1.0,
+                max_delay=8.0
+            )
+            text = response.choices[0].message.content
+
+            # Парсим JSON
+            try:
+                # Убираем возможные markdown-блоки
+                text = text.strip()
+                if text.startswith("```json"):
+                    text = text[7:]
+                if text.startswith("```"):
+                    text = text[3:]
+                if text.endswith("```"):
+                    text = text[:-3]
+                text = text.strip()
+
+                ideas = json.loads(text)
+                if not isinstance(ideas, list):
+                    raise ValueError("Ответ не является списком")
+                return ideas
+            except json.JSONDecodeError as e:
+                logger.error(f"Ошибка парсинга JSON: {e}, текст: {text}")
+                raise Exception("Не удалось распарсить ответ AI")
+        except Exception as e:
+            logger.error(f"Ошибка при генерации идей Stories: {e}")
+            raise Exception(f"Ошибка генерации идей: {e}")
 
 
 # --- ИСПРАВЛЕНО: Валидация на наличие текста (защита от фото/стикеров) ---
